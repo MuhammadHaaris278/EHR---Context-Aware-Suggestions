@@ -6,8 +6,6 @@ Handles vector search and document retrieval for RAG pipeline.
 import os
 import logging
 from typing import List, Optional, Dict
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
@@ -24,15 +22,37 @@ class ClinicalRetriever:
     async def initialize(self):
         try:
             logger.info("Initializing clinical retriever...")
+            
+            # Check NumPy version for debugging
+            try:
+                import numpy as np
+                logger.info(f"NumPy version: {np.__version__}")
+            except ImportError:
+                logger.warning("NumPy not found")
+
+            # Try new langchain-huggingface first, fall back to community version
+            try:
+                from langchain_huggingface import HuggingFaceEmbeddings
+                logger.info("Using langchain-huggingface HuggingFaceEmbeddings")
+            except ImportError:
+                logger.warning("langchain-huggingface not found, using community version")
+                from langchain_community.embeddings import HuggingFaceEmbeddings
 
             self.embeddings = HuggingFaceEmbeddings(
                 model_name="nomic-ai/nomic-embed-text-v1",
                 model_kwargs={
                     'device': 'cuda' if self._cuda_available() else 'cpu',
-                    'trust_remote_code': True  # Required to allow execution of model-specific code
+                    'trust_remote_code': True
                 },
                 encode_kwargs={'normalize_embeddings': True}
             )
+
+            # Try to import FAISS
+            try:
+                from langchain_community.vectorstores import FAISS
+            except ImportError:
+                logger.error("FAISS not available. Install with: pip install faiss-cpu")
+                raise
 
             if os.path.exists(self.index_path):
                 await self._load_index()
@@ -49,17 +69,27 @@ class ClinicalRetriever:
 
         except Exception as e:
             logger.error(f"Failed to initialize retriever: {e}")
+            logger.error("This might be due to NumPy version compatibility issues")
+            logger.error("Try: pip install 'numpy<2.0' to fix compatibility issues")
             raise
 
     def _cuda_available(self) -> bool:
+        """Check if CUDA is available, with better error handling."""
         try:
             import torch
-            return torch.cuda.is_available()
+            available = torch.cuda.is_available()
+            logger.info(f"CUDA available: {available}")
+            return available
         except ImportError:
+            logger.info("PyTorch not installed, using CPU")
+            return False
+        except Exception as e:
+            logger.warning(f"Error checking CUDA availability: {e}")
             return False
 
     async def _load_index(self):
         try:
+            from langchain_community.vectorstores import FAISS
             logger.info(f"Loading FAISS index from {self.index_path}")
             self.vectorstore = FAISS.load_local(
                 self.index_path,
@@ -74,6 +104,7 @@ class ClinicalRetriever:
 
     async def _create_empty_index(self):
         try:
+            from langchain_community.vectorstores import FAISS
             dummy_doc = Document(
                 page_content="Dummy document for initialization",
                 metadata={"source": "initialization", "type": "dummy"}

@@ -1,8 +1,7 @@
 """
-Enhanced AI pipeline for clinical recommendations using Mistral AI API.
-IMPROVED VERSION - Focus on patient history analysis and diagnostic reasoning.
-Handles large patient datasets efficiently with smart data processing.
-UPDATED with improved response parsing similar to GPT-4.1 pipeline.
+Enhanced AI pipeline for clinical recommendations using GPT-4.1 via GitHub AI.
+GPT-4.1 VERSION - Uses OpenAI's GPT-4.1 through GitHub AI inference endpoint.
+Optimized for medical diagnostic reasoning and patient history analysis.
 """
 
 import os
@@ -18,29 +17,28 @@ from pydantic import Field, PrivateAttr
 import json
 import hashlib
 from datetime import datetime, timedelta
-import re
 
 from .retriever import ClinicalRetriever
 from .prompt import ClinicalPromptTemplate
 
-# Load environment variables from .env file
+# Load environment variables
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-class MistralMedicalLLM(LLM):
+class GPT4MedicalLLM(LLM):
     """
-    Medical LLM using Mistral AI's official API.
+    Medical LLM using GPT-4.1 via GitHub AI inference endpoint.
     Optimized for clinical diagnostic reasoning and patient history analysis.
-    UPDATED with improved system prompt for better structured responses.
     """
     
     # Define fields using Pydantic Field for proper LangChain compatibility
-    model_name: str = Field(default="mistral-large-latest")
+    model_name: str = Field(default="gpt-4.1-preview")
     temperature: float = Field(default=0.1)
-    max_tokens: int = Field(default=2048)  # Increased for detailed diagnostics
+    max_tokens: int = Field(default=3000)  # GPT-4.1 can handle larger responses
     top_p: float = Field(default=0.95)
     api_key: Optional[str] = Field(default=None)
+    base_url: str = Field(default="https://models.github.ai/inference")
     
     # Use PrivateAttr for internal attributes
     _client: Any = PrivateAttr(default=None)
@@ -56,53 +54,56 @@ class MistralMedicalLLM(LLM):
     @property
     def _llm_type(self) -> str:
         """Return identifier of LLM type."""
-        return "mistral_medical_diagnostic_llm"
+        return "gpt4_medical_diagnostic_llm"
     
     def _setup_client(self):
-        """Setup the Mistral AI client."""
+        """Setup the GPT-4.1 client via GitHub AI."""
         try:
             # Get API key from instance or environment
-            api_key = self.api_key or os.environ.get("MISTRAL_API_KEY")
+            api_key = self.api_key or os.environ.get("OPENAI_API_KEY")
             
             if not api_key:
-                logger.error("No Mistral AI API key found. Set MISTRAL_API_KEY environment variable.")
-                logger.info("Get your API key from: https://console.mistral.ai/")
+                logger.error("No GPT-4.1 API key found. Set OPENAI_API_KEY environment variable.")
+                logger.info("Ensure your GitHub AI token is properly configured")
                 self.__dict__['_client'] = None
                 self.__dict__['_client_initialized'] = False
                 return
             
-            # Import and setup Mistral AI client
+            # Import and setup OpenAI client for GitHub AI
             try:
-                from mistralai import Mistral
-                logger.info("Mistral AI SDK available")
+                from openai import OpenAI
+                logger.info("OpenAI SDK available for GPT-4.1")
             except ImportError:
-                logger.error("Mistral AI SDK not installed. Install with: pip install mistralai")
+                logger.error("OpenAI SDK not installed. Install with: pip install openai")
                 self.__dict__['_client'] = None
                 self.__dict__['_client_initialized'] = False
                 return
             
-            # Create Mistral client
-            client = Mistral(api_key=api_key)
+            # Create OpenAI client with GitHub AI endpoint
+            client = OpenAI(
+                base_url=self.base_url,
+                api_key=api_key
+            )
             
             self.__dict__['_client'] = client
             self.__dict__['_client_initialized'] = True
-            logger.info(f"Mistral AI Medical Diagnostic LLM initialized successfully")
+            logger.info(f"GPT-4.1 Medical Diagnostic LLM initialized successfully via GitHub AI")
             
             # Test the connection
             self._test_connection()
             
         except Exception as e:
-            logger.error(f"Error setting up Mistral AI client: {e}")
+            logger.error(f"Error setting up GPT-4.1 client: {e}")
             self.__dict__['_client'] = None
             self.__dict__['_client_initialized'] = False
     
     def _test_connection(self):
-        """Test the Mistral AI connection with a diagnostic query."""
+        """Test the GPT-4.1 connection with a diagnostic query."""
         try:
-            logger.info("Testing Mistral AI connection with diagnostic query...")
+            logger.info("Testing GPT-4.1 connection with diagnostic query...")
             
-            # Test with a diagnostic question
-            test_response = self.__dict__['_client'].chat.complete(
+            # Test with a medical diagnostic question
+            test_response = self.__dict__['_client'].chat.completions.create(
                 model=self.model_name,
                 messages=[
                     {
@@ -111,28 +112,93 @@ class MistralMedicalLLM(LLM):
                     },
                     {
                         "role": "user",
-                        "content": "Patient with chest pain, shortness of breath, and family history of heart disease. What are the key diagnostic considerations?"
+                        "content": "A 65-year-old patient presents with chest pain, shortness of breath, and has a history of diabetes. What are the primary diagnostic considerations?"
                     }
                 ],
-                max_tokens=200,
+                max_tokens=300,
                 temperature=0.1,
             )
             
             # Check response
-            if hasattr(test_response, 'choices') and len(test_response.choices) > 0:
+            if test_response and test_response.choices and len(test_response.choices) > 0:
                 response_text = test_response.choices[0].message.content
-                logger.info(f"✅ Mistral AI diagnostic connection successful")
+                logger.info(f"✅ GPT-4.1 diagnostic connection successful")
                 logger.debug(f"Test response: {response_text[:150]}...")
                 return True
             else:
-                logger.error("Unexpected response format from Mistral AI")
+                logger.error("Unexpected response format from GPT-4.1")
                 self.__dict__['_client_initialized'] = False
                 return False
                 
         except Exception as e:
-            logger.error(f"Mistral AI connection test failed: {e}")
+            logger.error(f"GPT-4.1 connection test failed: {e}")
+            
+            # Provide specific error guidance for GitHub AI
+            error_str = str(e).lower()
+            if "unauthorized" in error_str or "401" in error_str:
+                logger.error("❌ Authentication failed. Please check your GitHub AI token")
+                logger.info("💡 Ensure you have:")
+                logger.info("   1. Valid GitHub AI access token")
+                logger.info("   2. Proper permissions for GPT-4.1 model access")
+                logger.info("   3. Token is correctly set as OPENAI_API_KEY environment variable")
+            elif "rate limit" in error_str or "429" in error_str:
+                logger.error("❌ Rate limit exceeded. Please try again later")
+            elif "model" in error_str and "not found" in error_str:
+                logger.error(f"❌ Model {self.model_name} not found")
+                logger.info("💡 Trying alternative GPT models...")
+                return self._try_alternative_gpt_models()
+            else:
+                logger.error(f"❌ Unexpected error: {e}")
+            
             self.__dict__['_client_initialized'] = False
             return False
+    
+    def _try_alternative_gpt_models(self) -> bool:
+        """Try alternative GPT models that might be available via GitHub AI."""
+        alternative_models = [
+            "openai/gpt-4.1",
+            "openai/gpt-4o",
+            "openai/gpt-4o-mini", 
+            "openai/gpt-4-turbo",
+            "openai/gpt-4",
+            "gpt-4o",
+            "gpt-4o-mini",
+            "gpt-4-turbo",
+            "gpt-4"
+        ]
+        
+        client = self.__dict__.get('_client', None)
+        if not client:
+            return False
+        
+        for model in alternative_models:
+            try:
+                logger.info(f"🧪 Trying GPT model: {model}")
+                
+                test_response = client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": "Define diabetes in one sentence."
+                        }
+                    ],
+                    max_tokens=50,
+                    temperature=0.1,
+                )
+                
+                if test_response and test_response.choices and len(test_response.choices) > 0:
+                    response_text = test_response.choices[0].message.content
+                    logger.info(f"✅ GPT model {model} successful")
+                    self.model_name = model  # Update to working model
+                    return True
+                
+            except Exception as e:
+                logger.warning(f"❌ GPT model {model} failed: {e}")
+                continue
+        
+        logger.info("🔄 All GPT models failed")
+        return False
     
     def _call(
         self,
@@ -141,23 +207,23 @@ class MistralMedicalLLM(LLM):
         run_manager: Optional[CallbackManagerForLLMRun] = None,
         **kwargs
     ) -> str:
-        """Make a call to Mistral AI API for medical diagnostic analysis."""
+        """Make a call to GPT-4.1 API for medical diagnostic analysis."""
         client_initialized = self.__dict__.get('_client_initialized', False)
         client = self.__dict__.get('_client', None)
         
         if not client_initialized or client is None:
-            logger.error("Mistral AI client not available - cannot generate diagnostic recommendations")
-            raise RuntimeError("Mistral AI client not initialized. Please check your API key and configuration.")
+            logger.error("GPT-4.1 client not available - cannot generate diagnostic recommendations")
+            raise RuntimeError("GPT-4.1 client not initialized. Please check your GitHub AI token and configuration.")
         
         try:
-            logger.info(f"Calling Mistral AI for diagnostic analysis with model: {self.model_name}")
+            logger.info(f"Calling GPT-4.1 for diagnostic analysis with model: {self.model_name}")
             
-            # IMPROVED: Create diagnostic-focused system prompt optimized for Mistral AI structured responses
-            mistral_diagnostic_system_prompt = """You are an expert clinical diagnostician with decades of experience in internal medicine and diagnostic reasoning. Provide comprehensive diagnostic assessments with clear, structured formatting.
+            # Create diagnostic-focused system prompt optimized for GPT-4.1
+            gpt4_diagnostic_system_prompt = """You are an expert clinical diagnostician with decades of experience in internal medicine and diagnostic reasoning. Provide comprehensive diagnostic assessments with clear, structured formatting.
 
 DIAGNOSTIC EXCELLENCE FRAMEWORK:
 1. SYSTEMATIC ANALYSIS: Review all patient data chronologically and by system
-2. PATTERN RECOGNITION: Identify clinical patterns and disease progression  
+2. PATTERN RECOGNITION: Identify clinical patterns and disease progression
 3. EVIDENCE-BASED REASONING: Support conclusions with specific patient data
 4. DIFFERENTIAL DIAGNOSIS: Generate ranked alternatives with clear likelihood estimates
 5. RISK STRATIFICATION: Assess immediate vs long-term patient risks
@@ -169,7 +235,7 @@ Structure your response EXACTLY as follows with clear section headers:
 PRIMARY DIAGNOSIS
 [State the single most likely diagnosis with confidence level (High/Medium/Low) and 3-5 key supporting evidence points from the patient data]
 
-DIFFERENTIAL DIAGNOSES  
+DIFFERENTIAL DIAGNOSES
 [List 3-5 alternative diagnoses, each on a new line starting with a dash (-), including likelihood percentage and brief supporting evidence]
 
 CLINICAL REASONING
@@ -197,13 +263,13 @@ FORMATTING RULES:
 
 BASE ALL CONCLUSIONS ON THE SPECIFIC PATIENT DATA PROVIDED."""
 
-            # Make the API call
-            response = client.chat.complete(
+            # Make the API call to GPT-4.1
+            response = client.chat.completions.create(
                 model=self.model_name,
                 messages=[
                     {
                         "role": "system",
-                        "content": mistral_diagnostic_system_prompt
+                        "content": gpt4_diagnostic_system_prompt
                     },
                     {
                         "role": "user",
@@ -216,23 +282,45 @@ BASE ALL CONCLUSIONS ON THE SPECIFIC PATIENT DATA PROVIDED."""
             )
             
             # Extract response text
-            if hasattr(response, 'choices') and len(response.choices) > 0:
+            if response and response.choices and len(response.choices) > 0:
                 response_text = response.choices[0].message.content
-                logger.info(f"✅ Mistral AI diagnostic analysis completed: {len(response_text)} characters")
+                logger.info(f"✅ GPT-4.1 diagnostic analysis completed: {len(response_text)} characters")
                 return response_text
             else:
-                logger.error("Unexpected response format from Mistral AI")
-                raise RuntimeError("Invalid response format from Mistral AI")
+                logger.error("Unexpected response format from GPT-4.1")
+                raise RuntimeError("Invalid response format from GPT-4.1")
             
         except Exception as e:
-            logger.error(f"Error calling Mistral AI for diagnostics: {e}")
+            logger.error(f"Error calling GPT-4.1 for diagnostics: {e}")
+            
+            # Enhanced error handling for GitHub AI specific issues
+            error_str = str(e).lower()
+            if "unauthorized" in error_str or "401" in error_str:
+                logger.error("❌ GPT-4.1 authentication failed")
+                logger.info("💡 Check your GitHub AI token and model access permissions")
+            elif "rate limit" in error_str or "429" in error_str:
+                logger.error("❌ GPT-4.1 rate limit exceeded")
+                logger.info("💡 Consider upgrading your GitHub AI plan or waiting before retry")
+            elif "model" in error_str and "not found" in error_str:
+                logger.error(f"❌ GPT model {self.model_name} not accessible via GitHub AI")
+                logger.info("💡 Verify model availability in your GitHub AI account")
+                if self._try_alternative_gpt_models():
+                    # Retry with new model
+                    return self._call(prompt, stop, run_manager, **kwargs)
+            else:
+                logger.error(f"❌ Unexpected GPT-4.1 error: {e}")
+            
             # Re-raise the error instead of falling back to mock responses
-            raise RuntimeError(f"Mistral AI diagnostic analysis failed: {str(e)}")
+            raise RuntimeError(f"GPT-4.1 diagnostic analysis failed: {str(e)}")
+
+# Keep the same PatientDataProcessor from the original implementation
+# (This class doesn't need changes as it's LLM-agnostic)
 
 class PatientDataProcessor:
     """
     Handles efficient processing of large patient datasets.
     Implements smart chunking and summarization for datasets up to 10,000+ lines.
+    This class is LLM-agnostic and works with both Mistral AI and GPT-4.1.
     """
     
     def __init__(self, max_chunk_size: int = 4000, overlap_size: int = 200):
@@ -253,7 +341,7 @@ class PatientDataProcessor:
                 logger.info("Using cached processed patient data")
                 return self.cache[cache_key]
             
-            logger.info("Processing large patient dataset...")
+            logger.info("Processing large patient dataset for GPT-4.1...")
             
             # Optimize and structure the data
             processed_data = {
@@ -268,7 +356,7 @@ class PatientDataProcessor:
             # Cache the processed data
             self.cache[cache_key] = processed_data
             
-            logger.info(f"Patient data processed: {processed_data['data_statistics']}")
+            logger.info(f"Patient data processed for GPT-4.1: {processed_data['data_statistics']}")
             return processed_data
             
         except Exception as e:
@@ -277,7 +365,6 @@ class PatientDataProcessor:
     
     def _create_cache_key(self, patient_data: Dict) -> str:
         """Create a cache key based on patient data content."""
-        # Create a hash of the patient data for caching
         data_str = json.dumps(patient_data, sort_keys=True, default=str)
         return hashlib.md5(data_str.encode()).hexdigest()
     
@@ -358,7 +445,6 @@ class PatientDataProcessor:
             # Analyze visit patterns
             visits = patient_data.get("visit_history", [])
             if visits:
-                # Count visit types
                 visit_types = {}
                 recent_complaints = []
                 
@@ -382,7 +468,6 @@ class PatientDataProcessor:
                     if len(word) > 3:  # Only significant words
                         word_counts[word] = word_counts.get(word, 0) + 1
                 
-                # Get most common symptom words
                 patterns["recurring_symptoms"] = [
                     word for word, count in sorted(word_counts.items(), key=lambda x: x[1], reverse=True)[:10]
                 ]
@@ -586,11 +671,10 @@ class PatientDataProcessor:
         
         return completeness_score / total_fields
 
-class ClinicalRecommendationPipeline:
+class GPT4ClinicalRecommendationPipeline:
     """
-    Enhanced pipeline for generating clinical recommendations using Mistral AI.
+    Enhanced pipeline for generating clinical recommendations using GPT-4.1 via GitHub AI.
     Focuses on diagnostic reasoning from comprehensive patient history analysis.
-    UPDATED with improved response parsing similar to GPT-4.1 pipeline.
     """
 
     def __init__(self):
@@ -601,16 +685,16 @@ class ClinicalRecommendationPipeline:
         self.initialized = False
 
     async def initialize(self):
-        """Initialize the clinical recommendation pipeline with Mistral AI."""
+        """Initialize the clinical recommendation pipeline with GPT-4.1."""
         try:
-            logger.info("Initializing IMPROVED Mistral AI clinical diagnostic pipeline...")
+            logger.info("Initializing GPT-4.1 clinical diagnostic pipeline via GitHub AI...")
             
             # Initialize retriever for medical literature
             self.retriever = ClinicalRetriever()
             await self.retriever.initialize()
             
-            # Initialize Mistral AI LLM
-            await self._initialize_mistral_llm()
+            # Initialize GPT-4.1 LLM
+            await self._initialize_gpt4_llm()
             
             # Initialize prompt template
             self.prompt_template = ClinicalPromptTemplate()
@@ -619,60 +703,62 @@ class ClinicalRecommendationPipeline:
             self.data_processor = PatientDataProcessor()
             
             self.initialized = True
-            logger.info("IMPROVED Mistral AI clinical diagnostic pipeline initialization complete")
+            logger.info("GPT-4.1 clinical diagnostic pipeline initialization complete")
             
         except Exception as e:
-            logger.error(f"Failed to initialize IMPROVED Mistral AI clinical pipeline: {e}")
+            logger.error(f"Failed to initialize GPT-4.1 clinical pipeline: {e}")
             raise
 
-    async def _initialize_mistral_llm(self):
-        """Initialize the Mistral AI LLM with diagnostic configuration."""
+    async def _initialize_gpt4_llm(self):
+        """Initialize the GPT-4.1 LLM with diagnostic configuration."""
         try:
-            logger.info("Initializing IMPROVED Mistral AI Diagnostic LLM...")
+            logger.info("Initializing GPT-4.1 Diagnostic LLM via GitHub AI...")
             
             # Get token from environment
-            token = os.environ.get("MISTRAL_API_KEY")
+            token = os.environ.get("OPENAI_API_KEY")
             
             if not token:
-                raise RuntimeError("MISTRAL_API_KEY not found. Please set your Mistral AI API key.")
+                raise RuntimeError("OPENAI_API_KEY not found. Please set your GitHub AI token.")
             
             # Test if we can import required modules
             try:
-                from mistralai import Mistral
-                logger.info("Mistral AI SDK available")
+                from openai import OpenAI
+                logger.info("OpenAI SDK available for GPT-4.1")
             except ImportError:
-                raise RuntimeError("Mistral AI SDK not installed. Install with: pip install mistralai")
+                raise RuntimeError("OpenAI SDK not installed. Install with: pip install openai")
             
-            # Create Mistral Medical LLM with diagnostic configuration
-            self.llm = MistralMedicalLLM(
-                model_name="mistral-large-latest",  # Best model for complex diagnostic reasoning
-                temperature=0.1,  # Low temperature for consistent diagnostic analysis
-                max_tokens=2048,  # Increased for detailed diagnostic reports
+            # Create GPT-4.1 Medical LLM with diagnostic configuration
+            self.llm = GPT4MedicalLLM(
+                model_name="openai/gpt-4.1",  # Correct GitHub AI model name
+                temperature=0.1,  # Low temperature for consistent medical advice
+                max_tokens=3000,  # Increased for detailed diagnostic reports
                 top_p=0.95,
                 api_key=token,
+                base_url="https://models.github.ai/inference"
             )
             
             # Test the LLM with a diagnostic scenario
             test_prompt = """
             Analyze this patient case:
             
-            Patient: 65-year-old male
-            History: Hypertension, Type 2 diabetes
-            Recent symptoms: Chest pain, shortness of breath, fatigue
+            Patient: 72-year-old female
+            History: Type 2 diabetes, hypertension, chronic kidney disease
+            Recent symptoms: Progressive shortness of breath, ankle swelling, fatigue
+            Current medications: Metformin, Lisinopril, Furosemide
             
             Provide diagnostic assessment.
             """
             
             try:
                 test_response = self.llm._call(test_prompt)
-                logger.info("✅ IMPROVED Mistral AI Diagnostic LLM initialized and tested successfully")
+                logger.info("✅ GPT-4.1 Diagnostic LLM initialized and tested successfully")
                 logger.info(f"✅ Using model: {self.llm.model_name}")
             except Exception as e:
-                logger.error(f"Mistral AI LLM test call failed: {e}")
-                raise RuntimeError(f"Mistral AI diagnostic test failed: {e}")
+                logger.error(f"GPT-4.1 LLM test call failed: {e}")
+                raise RuntimeError(f"GPT-4.1 diagnostic test failed: {e}")
                 
         except Exception as e:
-            logger.error(f"Error initializing IMPROVED Mistral AI LLM: {e}")
+            logger.error(f"Error initializing GPT-4.1 LLM: {e}")
             raise
 
     async def analyze_patient_history(
@@ -680,14 +766,13 @@ class ClinicalRecommendationPipeline:
         patient_data: Dict
     ) -> Dict:
         """
-        Main method: Analyze comprehensive patient history and generate diagnostic assessment.
-        UPDATED with improved response parsing for better structured output.
+        Main method: Analyze comprehensive patient history and generate diagnostic assessment using GPT-4.1.
         """
         try:
             if not self.initialized:
-                raise RuntimeError("IMPROVED Mistral AI diagnostic pipeline not initialized")
+                raise RuntimeError("GPT-4.1 diagnostic pipeline not initialized")
 
-            logger.info(f"Starting IMPROVED comprehensive patient history analysis for patient {patient_data.get('patient_id')}")
+            logger.info(f"Starting comprehensive patient history analysis with GPT-4.1 for patient {patient_data.get('patient_id')}")
             
             # Step 1: Process large patient dataset efficiently
             processed_data = self.data_processor.process_large_patient_data(patient_data)
@@ -698,11 +783,11 @@ class ClinicalRecommendationPipeline:
             # Step 3: Create comprehensive diagnostic prompt
             diagnostic_prompt = self._create_diagnostic_prompt(processed_data, literature_context)
             
-            # Step 4: Get diagnostic analysis from Mistral AI
-            diagnostic_analysis = await self._execute_diagnostic_analysis(diagnostic_prompt)
+            # Step 4: Get diagnostic analysis from GPT-4.1
+            diagnostic_analysis = await self._execute_gpt4_diagnostic_analysis(diagnostic_prompt)
             
-            # Step 5: Structure and validate the diagnostic response (IMPROVED)
-            structured_diagnosis = self._structure_diagnostic_response_improved(diagnostic_analysis, processed_data)
+            # Step 5: Structure and validate the diagnostic response
+            structured_diagnosis = self._structure_diagnostic_response(diagnostic_analysis, processed_data)
 
             return {
                 "diagnostic_assessment": structured_diagnosis,
@@ -713,20 +798,116 @@ class ClinicalRecommendationPipeline:
                 "literature_sources": literature_context.get("sources", []),
                 "confidence_score": self._calculate_diagnostic_confidence(diagnostic_analysis, processed_data),
                 "processing_stats": processed_data.get("data_statistics"),
-                "model_used": f"IMPROVED Mistral AI - {self.llm.model_name}",
+                "model_used": f"GPT-4.1 via GitHub AI - {self.llm.model_name}",
                 "analysis_timestamp": datetime.now().isoformat(),
-                "api_provider": "Mistral AI (Improved)"
+                "api_provider": "GitHub AI (OpenAI GPT-4.1)"
             }
             
         except Exception as e:
-            logger.error(f"Error in IMPROVED patient history analysis: {e}")
-            raise RuntimeError(f"IMPROVED patient history analysis failed: {str(e)}")
+            logger.error(f"Error in GPT-4.1 patient history analysis: {e}")
+            raise RuntimeError(f"GPT-4.1 patient history analysis failed: {str(e)}")
 
-    def _structure_diagnostic_response_improved(self, diagnostic_analysis: str, processed_data: Dict) -> Dict:
-        """
-        IMPROVED response structuring for Mistral AI with better parsing similar to GPT-4.1.
-        Fixes the issues where sections were empty or poorly parsed.
-        """
+    async def _retrieve_relevant_literature(self, processed_data: Dict) -> Dict:
+        """Retrieve relevant medical literature based on patient data."""
+        try:
+            literature_context = {"sources": [], "content": ""}
+            
+            # Extract key medical terms for literature search
+            search_terms = []
+            
+            # Add primary conditions
+            primary_conditions = processed_data.get("patient_summary", {}).get("primary_conditions", [])
+            search_terms.extend(primary_conditions[:3])  # Top 3 conditions
+            
+            # Add recurring symptoms
+            recurring_symptoms = processed_data.get("clinical_patterns", {}).get("recurring_symptoms", [])
+            search_terms.extend(recurring_symptoms[:3])  # Top 3 symptoms
+            
+            # Search for relevant literature
+            if search_terms:
+                search_query = " ".join(search_terms)
+                retrieved_docs = await self.retriever.search(search_query, k=5)
+                
+                literature_parts = []
+                sources = []
+                
+                for doc in retrieved_docs:
+                    literature_parts.append(doc.page_content[:500])  # Limit to 500 chars per doc
+                    if hasattr(doc, 'metadata') and doc.metadata.get('source'):
+                        sources.append(doc.metadata['source'])
+                
+                literature_context = {
+                    "content": "\n\n".join(literature_parts),
+                    "sources": sources
+                }
+            
+            logger.info(f"Retrieved {len(literature_context['sources'])} relevant literature sources for GPT-4.1")
+            return literature_context
+            
+        except Exception as e:
+            logger.error(f"Error retrieving literature: {e}")
+            return {"sources": [], "content": ""}
+
+    def _create_diagnostic_prompt(self, processed_data: Dict, literature_context: Dict) -> str:
+        """Create a comprehensive diagnostic prompt for GPT-4.1 using the updated prompt system."""
+        try:
+            # Use the updated prompt template system optimized for GPT-4.1
+            diagnostic_prompt = self.prompt_template.create_comprehensive_diagnostic_prompt(
+                processed_data, literature_context
+            )
+            
+            logger.info(f"Diagnostic prompt created for GPT-4.1: {len(diagnostic_prompt)} characters")
+            return diagnostic_prompt
+            
+        except Exception as e:
+            logger.error(f"Error creating diagnostic prompt for GPT-4.1: {e}")
+            # Fallback to basic prompt creation
+            return self._create_fallback_diagnostic_prompt(processed_data, literature_context)
+    
+    def _create_fallback_diagnostic_prompt(self, processed_data: Dict, literature_context: Dict) -> str:
+        """Fallback diagnostic prompt creation if main system fails."""
+        patient_summary = processed_data.get("patient_summary", {})
+        
+        fallback_prompt = f"""
+=== GPT-4.1 PATIENT DIAGNOSTIC ANALYSIS ===
+
+Patient: {patient_summary.get('patient_id', 'Unknown')}
+Demographics: {patient_summary.get('demographics', 'Not available')}
+
+Active Conditions: {', '.join(patient_summary.get('primary_conditions', []))}
+Current Medications: {', '.join(patient_summary.get('key_medications', []))}
+
+Please provide a comprehensive diagnostic assessment including:
+1. Primary diagnosis with confidence level
+2. Differential diagnoses ranked by likelihood
+3. Clinical reasoning and evidence
+4. Risk stratification
+5. Recommended diagnostic workup
+6. Immediate management priorities
+7. Follow-up care plan
+
+Base your analysis on the patient data provided and use your advanced reasoning capabilities.
+"""
+        
+        return fallback_prompt
+
+    async def _execute_gpt4_diagnostic_analysis(self, diagnostic_prompt: str) -> str:
+        """Execute diagnostic analysis using GPT-4.1."""
+        try:
+            logger.info("Executing comprehensive diagnostic analysis with GPT-4.1...")
+            
+            # Call GPT-4.1 for diagnostic analysis
+            analysis_result = self.llm._call(diagnostic_prompt)
+            
+            logger.info(f"GPT-4.1 diagnostic analysis completed: {len(analysis_result)} characters")
+            return analysis_result
+            
+        except Exception as e:
+            logger.error(f"Error executing GPT-4.1 diagnostic analysis: {e}")
+            raise RuntimeError(f"GPT-4.1 diagnostic analysis failed: {str(e)}")
+
+    def _structure_diagnostic_response(self, diagnostic_analysis: str, processed_data: Dict) -> Dict:
+        """Structure the GPT-4.1 diagnostic response with improved parsing for meaningful output."""
         try:
             # Initialize structured response
             structured_response = {
@@ -741,31 +922,31 @@ class ClinicalRecommendationPipeline:
             }
             
             # Clean and normalize the text for better parsing
-            cleaned_text = self._clean_mistral_response(diagnostic_analysis)
+            cleaned_text = self._clean_gpt4_response(diagnostic_analysis)
             
             # Split into logical sections
-            sections = self._split_mistral_into_sections(cleaned_text)
+            sections = self._split_into_sections(cleaned_text)
             
             # Extract each section with improved logic
-            structured_response["primary_diagnosis"] = self._extract_mistral_primary_diagnosis(sections.get("primary_diagnosis", []))
-            structured_response["differential_diagnoses"] = self._extract_mistral_differential_diagnoses(sections.get("differential_diagnoses", []))
-            structured_response["clinical_reasoning"] = self._extract_mistral_clinical_reasoning(sections.get("clinical_reasoning", []))
-            structured_response["risk_stratification"] = self._extract_mistral_risk_stratification(sections.get("risk_stratification", []))
-            structured_response["recommended_workup"] = self._extract_mistral_workup(sections.get("recommended_workup", []))
-            structured_response["immediate_management"] = self._extract_mistral_management(sections.get("immediate_management", []))
-            structured_response["follow_up_recommendations"] = self._extract_mistral_followup(sections.get("follow_up_recommendations", []))
+            structured_response["primary_diagnosis"] = self._extract_primary_diagnosis_improved(sections.get("primary_diagnosis", []))
+            structured_response["differential_diagnoses"] = self._extract_differential_diagnoses_improved(sections.get("differential_diagnoses", []))
+            structured_response["clinical_reasoning"] = self._extract_clinical_reasoning_improved(sections.get("clinical_reasoning", []))
+            structured_response["risk_stratification"] = self._extract_risk_stratification_improved(sections.get("risk_stratification", []))
+            structured_response["recommended_workup"] = self._extract_workup_improved(sections.get("recommended_workup", []))
+            structured_response["immediate_management"] = self._extract_management_improved(sections.get("immediate_management", []))
+            structured_response["follow_up_recommendations"] = self._extract_followup_improved(sections.get("follow_up_recommendations", []))
             
-            logger.info("Mistral AI diagnostic response parsed with IMPROVED accuracy")
+            logger.info("GPT-4.1 diagnostic response parsed with improved accuracy")
             return structured_response
             
         except Exception as e:
-            logger.error(f"Error in IMPROVED Mistral AI response parsing: {e}")
+            logger.error(f"Error in improved GPT-4.1 response parsing: {e}")
             # Fallback with better error handling
-            return self._fallback_mistral_response_extraction(diagnostic_analysis, processed_data)
+            return self._fallback_response_extraction(diagnostic_analysis, processed_data)
 
-    def _clean_mistral_response(self, text: str) -> str:
-        """Clean Mistral AI response text for better parsing."""
-        # Remove markdown formatting that Mistral AI uses
+    def _clean_gpt4_response(self, text: str) -> str:
+        """Clean GPT-4.1 response text for better parsing."""
+        # Remove markdown formatting
         cleaned = text.replace('**', '').replace('*', '')
         # Normalize line breaks
         cleaned = cleaned.replace('\r\n', '\n').replace('\r', '\n')
@@ -773,8 +954,8 @@ class ClinicalRecommendationPipeline:
         lines = [line.strip() for line in cleaned.split('\n')]
         return '\n'.join(line for line in lines if line)
 
-    def _split_mistral_into_sections(self, text: str) -> Dict[str, List[str]]:
-        """Split Mistral AI response into logical sections with improved recognition."""
+    def _split_into_sections(self, text: str) -> Dict[str, List[str]]:
+        """Split GPT-4.1 response into logical sections with improved recognition."""
         sections = {
             "primary_diagnosis": [],
             "differential_diagnoses": [],
@@ -797,7 +978,7 @@ class ClinicalRecommendationPipeline:
                 
             line_upper = line.upper()
             
-            # Improved section detection for Mistral AI patterns
+            # Improved section detection with multiple patterns
             section_detected = None
             
             if any(pattern in line_upper for pattern in ["PRIMARY DIAGNOSIS", "MOST LIKELY DIAGNOSIS", "MAIN DIAGNOSIS"]):
@@ -838,8 +1019,8 @@ class ClinicalRecommendationPipeline:
         
         return sections
 
-    def _extract_mistral_primary_diagnosis(self, content: List[str]) -> str:
-        """Extract primary diagnosis from Mistral AI response with better accuracy."""
+    def _extract_primary_diagnosis_improved(self, content: List[str]) -> str:
+        """Extract primary diagnosis with better accuracy."""
         if not content:
             return "Primary diagnosis not identified in response"
         
@@ -863,7 +1044,7 @@ class ClinicalRecommendationPipeline:
             # Take the first substantial line as the primary diagnosis
             primary = diagnosis_parts[0]
             
-            # Clean up common artifacts and Mistral AI formatting
+            # Clean up common artifacts
             primary = primary.lstrip('- • * 1. 2. 3.')
             primary = primary.replace('Diagnosis:', '').replace('Primary:', '').strip()
             
@@ -871,8 +1052,8 @@ class ClinicalRecommendationPipeline:
         
         return "Primary diagnosis not clearly identified"
 
-    def _extract_mistral_differential_diagnoses(self, content: List[str]) -> List[Dict]:
-        """Extract differential diagnoses from Mistral AI with improved structure."""
+    def _extract_differential_diagnoses_improved(self, content: List[str]) -> List[Dict]:
+        """Extract differential diagnoses with improved structure."""
         differentials = []
         current_diagnosis = None
         
@@ -895,6 +1076,7 @@ class ClinicalRecommendationPipeline:
                 # Extract likelihood percentage if present
                 likelihood = "unknown"
                 if '%' in diagnosis_text:
+                    import re
                     percentage_match = re.search(r'(\d+%)', diagnosis_text)
                     if percentage_match:
                         likelihood = percentage_match.group(1)
@@ -914,6 +1096,7 @@ class ClinicalRecommendationPipeline:
                     else:
                         current_diagnosis["evidence"] = line
                 elif "likelihood" in line.lower() and '%' in line:
+                    import re
                     percentage_match = re.search(r'(\d+%)', line)
                     if percentage_match:
                         current_diagnosis["likelihood"] = percentage_match.group(1)
@@ -924,8 +1107,8 @@ class ClinicalRecommendationPipeline:
         
         return differentials[:5]  # Limit to 5 most relevant
 
-    def _extract_mistral_clinical_reasoning(self, content: List[str]) -> str:
-        """Extract clinical reasoning from Mistral AI with better formatting."""
+    def _extract_clinical_reasoning_improved(self, content: List[str]) -> str:
+        """Extract clinical reasoning with better formatting."""
         if not content:
             return "Clinical reasoning not provided"
         
@@ -943,8 +1126,8 @@ class ClinicalRecommendationPipeline:
         
         return "Clinical reasoning not clearly provided"
 
-    def _extract_mistral_risk_stratification(self, content: List[str]) -> str:
-        """Extract risk stratification from Mistral AI with better structure."""
+    def _extract_risk_stratification_improved(self, content: List[str]) -> str:
+        """Extract risk stratification with better structure."""
         if not content:
             return "Risk stratification not provided"
         
@@ -959,8 +1142,8 @@ class ClinicalRecommendationPipeline:
         
         return "Risk assessment not clearly provided"
 
-    def _extract_mistral_workup(self, content: List[str]) -> List[str]:
-        """Extract recommended workup from Mistral AI with better parsing."""
+    def _extract_workup_improved(self, content: List[str]) -> List[str]:
+        """Extract recommended workup with better parsing."""
         workup_items = []
         current_item = ""
         
@@ -993,8 +1176,8 @@ class ClinicalRecommendationPipeline:
         
         return workup_items[:8]  # Limit to 8 items
 
-    def _extract_mistral_management(self, content: List[str]) -> List[str]:
-        """Extract immediate management from Mistral AI with better parsing."""
+    def _extract_management_improved(self, content: List[str]) -> List[str]:
+        """Extract immediate management with better parsing."""
         management_items = []
         current_item = ""
         
@@ -1027,8 +1210,8 @@ class ClinicalRecommendationPipeline:
         
         return management_items[:8]  # Limit to 8 items
 
-    def _extract_mistral_followup(self, content: List[str]) -> List[str]:
-        """Extract follow-up recommendations from Mistral AI with better parsing."""
+    def _extract_followup_improved(self, content: List[str]) -> List[str]:
+        """Extract follow-up recommendations with better parsing."""
         followup_items = []
         current_item = ""
         
@@ -1061,8 +1244,8 @@ class ClinicalRecommendationPipeline:
         
         return followup_items[:8]  # Limit to 8 items
 
-    def _fallback_mistral_response_extraction(self, diagnostic_analysis: str, processed_data: Dict) -> Dict:
-        """Fallback extraction method when primary parsing fails for Mistral AI."""
+    def _fallback_response_extraction(self, diagnostic_analysis: str, processed_data: Dict) -> Dict:
+        """Fallback extraction method when primary parsing fails."""
         return {
             "primary_diagnosis": "Unable to parse primary diagnosis - see full analysis",
             "differential_diagnoses": [
@@ -1081,122 +1264,149 @@ class ClinicalRecommendationPipeline:
             "parsing_note": "Automated parsing failed - full analysis available in 'full_analysis' field"
         }
 
-    async def _retrieve_relevant_literature(self, processed_data: Dict) -> Dict:
-        """Retrieve relevant medical literature based on patient data."""
-        try:
-            literature_context = {"sources": [], "content": ""}
+    def _extract_primary_diagnosis(self, content_lines: List[str]) -> str:
+        """Extract primary diagnosis from content lines."""
+        # Look for the actual diagnosis content
+        diagnosis_parts = []
+        for line in content_lines:
+            if line and not line.startswith('-') and not line.startswith('•'):
+                diagnosis_parts.append(line)
+        
+        return " ".join(diagnosis_parts) if diagnosis_parts else "Primary diagnosis not clearly identified"
+
+    def _parse_gpt4_differential_diagnoses(self, content_lines: List[str]) -> List[Dict]:
+        """Parse differential diagnoses from GPT-4.1 content lines with better formatting."""
+        differentials = []
+        current_dx = None
+        
+        for line in content_lines:
+            line = line.strip()
             
-            # Extract key medical terms for literature search
-            search_terms = []
-            
-            # Add primary conditions
-            primary_conditions = processed_data.get("patient_summary", {}).get("primary_conditions", [])
-            search_terms.extend(primary_conditions[:3])  # Top 3 conditions
-            
-            # Add recurring symptoms
-            recurring_symptoms = processed_data.get("clinical_patterns", {}).get("recurring_symptoms", [])
-            search_terms.extend(recurring_symptoms[:3])  # Top 3 symptoms
-            
-            # Search for relevant literature
-            if search_terms:
-                search_query = " ".join(search_terms)
-                retrieved_docs = await self.retriever.search(search_query, k=5)
+            # Look for numbered items or diagnosis names
+            if (line.startswith('-') or line.startswith('•') or 
+                any(char.isdigit() and char in line[:3] for char in line[:3]) or
+                (len(line) > 10 and line[0].isupper())):
                 
-                literature_parts = []
-                sources = []
+                # Save previous diagnosis
+                if current_dx and current_dx["diagnosis"]:
+                    differentials.append(current_dx)
                 
-                for doc in retrieved_docs:
-                    literature_parts.append(doc.page_content[:500])  # Limit to 500 chars per doc
-                    if hasattr(doc, 'metadata') and doc.metadata.get('source'):
-                        sources.append(doc.metadata['source'])
+                # Start new diagnosis
+                diagnosis_text = line.lstrip('-•0123456789. ')
                 
-                literature_context = {
-                    "content": "\n\n".join(literature_parts),
-                    "sources": sources
+                # Extract likelihood if present
+                likelihood = "unknown"
+                if "%" in diagnosis_text:
+                    parts = diagnosis_text.split()
+                    for part in parts:
+                        if "%" in part:
+                            likelihood = part
+                            diagnosis_text = diagnosis_text.replace(part, "").strip()
+                            break
+                
+                current_dx = {
+                    "diagnosis": diagnosis_text,
+                    "evidence": "",
+                    "likelihood": likelihood
                 }
-            
-            logger.info(f"Retrieved {len(literature_context['sources'])} relevant literature sources for Mistral AI")
-            return literature_context
-            
-        except Exception as e:
-            logger.error(f"Error retrieving literature: {e}")
-            return {"sources": [], "content": ""}
-
-    def _create_diagnostic_prompt(self, processed_data: Dict, literature_context: Dict) -> str:
-        """Create a comprehensive diagnostic prompt for Mistral AI using the updated prompt system."""
-        try:
-            # Use the updated prompt template system optimized for Mistral AI
-            diagnostic_prompt = self.prompt_template.create_comprehensive_diagnostic_prompt(
-                processed_data, literature_context
-            )
-            
-            logger.info(f"Diagnostic prompt created for Mistral AI: {len(diagnostic_prompt)} characters")
-            return diagnostic_prompt
-            
-        except Exception as e:
-            logger.error(f"Error creating diagnostic prompt for Mistral AI: {e}")
-            # Fallback to basic prompt creation
-            return self._create_fallback_diagnostic_prompt(processed_data, literature_context)
-    
-    def _create_fallback_diagnostic_prompt(self, processed_data: Dict, literature_context: Dict) -> str:
-        """Fallback diagnostic prompt creation if main system fails."""
-        patient_summary = processed_data.get("patient_summary", {})
+            elif current_dx and line:
+                # Add to current diagnosis evidence
+                if "supporting" in line.lower() or "evidence" in line.lower():
+                    current_dx["evidence"] += " " + line
+                elif "likelihood" in line.lower() and "%" in line:
+                    # Extract likelihood
+                    parts = line.split()
+                    for part in parts:
+                        if "%" in part:
+                            current_dx["likelihood"] = part
+                            break
         
-        fallback_prompt = f"""
-=== MISTRAL AI PATIENT DIAGNOSTIC ANALYSIS ===
-
-Patient: {patient_summary.get('patient_id', 'Unknown')}
-Demographics: {patient_summary.get('demographics', 'Not available')}
-
-Active Conditions: {', '.join(patient_summary.get('primary_conditions', []))}
-Current Medications: {', '.join(patient_summary.get('key_medications', []))}
-
-Please provide a comprehensive diagnostic assessment including:
-1. Primary diagnosis with confidence level
-2. Differential diagnoses ranked by likelihood
-3. Clinical reasoning and evidence
-4. Risk stratification
-5. Recommended diagnostic workup
-6. Immediate management priorities
-7. Follow-up care plan
-
-Base your analysis on the patient data provided and use your advanced reasoning capabilities.
-"""
+        # Add the last diagnosis
+        if current_dx and current_dx["diagnosis"]:
+            differentials.append(current_dx)
         
-        return fallback_prompt
+        return differentials[:5]  # Limit to 5 differential diagnoses
 
-    def _format_demographics(self, demographics: Dict) -> str:
-        """Format demographics for better readability."""
-        if not demographics:
-            return "Demographics not available"
+    def _parse_gpt4_recommendations(self, content_lines: List[str]) -> List[str]:
+        """Parse recommendations from GPT-4.1 content lines with better handling."""
+        recommendations = []
+        current_rec = ""
         
-        parts = []
-        if demographics.get('age'):
-            parts.append(f"{demographics['age']} years old")
-        if demographics.get('gender'):
-            parts.append(demographics['gender'])
-        if demographics.get('name'):
-            parts.append(f"({demographics['name']})")
+        for line in content_lines:
+            line = line.strip()
+            
+            if not line:
+                continue
+                
+            # Check if this is a new recommendation item
+            if (line.startswith('-') or line.startswith('•') or 
+                any(char.isdigit() and char in line[:3] for char in line[:3]) or
+                line.endswith(':') and len(line) < 50):
+                
+                # Save previous recommendation
+                if current_rec:
+                    clean_rec = current_rec.strip().lstrip('-•0123456789. ')
+                    if len(clean_rec) > 10:
+                        recommendations.append(clean_rec)
+                
+                # Start new recommendation
+                current_rec = line
+            else:
+                # Continue current recommendation
+                if current_rec:
+                    current_rec += " " + line
+                else:
+                    current_rec = line
         
-        return ", ".join(parts) if parts else "Limited demographic data"
+        # Add the last recommendation
+        if current_rec:
+            clean_rec = current_rec.strip().lstrip('-•0123456789. ')
+            if len(clean_rec) > 10:
+                recommendations.append(clean_rec)
+        
+        return recommendations[:8]  # Limit to 8 recommendations
 
-    async def _execute_diagnostic_analysis(self, diagnostic_prompt: str) -> str:
-        """Execute diagnostic analysis using Mistral AI."""
-        try:
-            logger.info("Executing comprehensive diagnostic analysis with IMPROVED Mistral AI...")
-            
-            # Call Mistral AI for diagnostic analysis
-            analysis_result = self.llm._call(diagnostic_prompt)
-            
-            logger.info(f"Mistral AI diagnostic analysis completed: {len(analysis_result)} characters")
-            return analysis_result
-            
-        except Exception as e:
-            logger.error(f"Error executing Mistral AI diagnostic analysis: {e}")
-            raise RuntimeError(f"Mistral AI diagnostic analysis failed: {str(e)}")
+    def _parse_differential_diagnoses(self, content_lines: List[str]) -> List[Dict]:
+        """Parse differential diagnoses from GPT-4.1 content lines."""
+        differentials = []
+        current_dx = None
+        
+        for line in content_lines:
+            line = line.strip()
+            if line.startswith('-') or line.startswith('•') or line.startswith('*') or any(char.isdigit() and char in line[:3] for char in line[:3]):
+                # New differential diagnosis
+                if current_dx:
+                    differentials.append(current_dx)
+                
+                current_dx = {
+                    "diagnosis": line.lstrip('-•*0123456789. '),
+                    "evidence": "",
+                    "likelihood": "unknown"
+                }
+            elif current_dx and line:
+                # Add to current diagnosis description
+                current_dx["evidence"] += " " + line
+        
+        if current_dx:
+            differentials.append(current_dx)
+        
+        return differentials[:5]  # Limit to 5 differential diagnoses
+
+    def _parse_recommendations(self, content_lines: List[str]) -> List[str]:
+        """Parse recommendations from GPT-4.1 content lines."""
+        recommendations = []
+        
+        for line in content_lines:
+            line = line.strip()
+            if line and (line.startswith('-') or line.startswith('•') or line.startswith('*') or any(char.isdigit() and char in line[:3] for char in line[:3])):
+                clean_rec = line.lstrip('-•*0123456789. ')
+                if len(clean_rec) > 10:  # Only meaningful recommendations
+                    recommendations.append(clean_rec)
+        
+        return recommendations[:8]  # Limit to 8 recommendations
 
     def _calculate_diagnostic_confidence(self, diagnostic_analysis: str, processed_data: Dict) -> float:
-        """Calculate confidence score for the Mistral AI diagnostic analysis."""
+        """Calculate confidence score for the GPT-4.1 diagnostic analysis."""
         try:
             confidence_factors = []
             
@@ -1204,9 +1414,9 @@ Base your analysis on the patient data provided and use your advanced reasoning 
             data_completeness = processed_data.get("data_statistics", {}).get("data_completeness", 0.5)
             confidence_factors.append(data_completeness * 0.3)
             
-            # Factor 2: Analysis detail and structure 
+            # Factor 2: Analysis detail and structure (GPT-4.1 typically provides detailed responses)
             analysis_length = len(diagnostic_analysis)
-            length_factor = min(analysis_length / 2000, 1.0)  # Normalize to 2000 chars for Mistral AI
+            length_factor = min(analysis_length / 2500, 1.0)  # Normalize to 2500 chars for GPT-4.1
             confidence_factors.append(length_factor * 0.2)
             
             # Factor 3: Number of data points available
@@ -1228,19 +1438,19 @@ Base your analysis on the patient data provided and use your advanced reasoning 
                 pattern_score += 0.1
             confidence_factors.append(pattern_score)
             
-            # Factor 5: Mistral AI quality bonus
-            mistral_bonus = 0.1  # Solid model for medical reasoning
-            confidence_factors.append(mistral_bonus)
+            # Factor 5: GPT-4.1 quality bonus (high-quality model)
+            gpt4_bonus = 0.15  # Higher than Mistral due to GPT-4.1's advanced capabilities
+            confidence_factors.append(gpt4_bonus)
             
             # Calculate final confidence
             final_confidence = sum(confidence_factors)
             return min(max(final_confidence, 0.1), 0.95)  # Clamp between 0.1 and 0.95
             
         except Exception as e:
-            logger.error(f"Error calculating Mistral AI diagnostic confidence: {e}")
-            return 0.6  # Default moderate confidence
+            logger.error(f"Error calculating GPT-4.1 diagnostic confidence: {e}")
+            return 0.7  # Default higher confidence for GPT-4.1
 
-    # Legacy method for backward compatibility (now redirects to new method)
+    # Legacy method for backward compatibility
     async def generate_recommendations(
         self,
         patient_data: Dict,
@@ -1250,9 +1460,9 @@ Base your analysis on the patient data provided and use your advanced reasoning 
     ) -> Dict:
         """
         Legacy method for backward compatibility.
-        Redirects to the new analyze_patient_history method.
+        Redirects to the new GPT-4.1 analyze_patient_history method.
         """
-        logger.info("Legacy generate_recommendations called - redirecting to IMPROVED analyze_patient_history")
+        logger.info("Legacy generate_recommendations called - redirecting to GPT-4.1 analyze_patient_history")
         
         try:
             # Call the new comprehensive analysis method
@@ -1279,22 +1489,22 @@ Base your analysis on the patient data provided and use your advanced reasoning 
             # Return in legacy format
             return {
                 "suggestions": recommendations,
-                "confidence": analysis_result.get("confidence_score", 0.6),
+                "confidence": analysis_result.get("confidence_score", 0.7),
                 "sources": analysis_result.get("literature_sources", []),
                 "patient_context": analysis_result.get("patient_summary", {}),
-                "model_used": analysis_result.get("model_used", "IMPROVED Mistral AI"),
-                "api_provider": "Mistral AI (Improved)",
+                "model_used": analysis_result.get("model_used", "GPT-4.1 via GitHub AI"),
+                "api_provider": "GitHub AI (OpenAI GPT-4.1)",
                 "diagnostic_analysis": analysis_result.get("diagnostic_assessment"),
                 "comprehensive_analysis": analysis_result
             }
             
         except Exception as e:
-            logger.error(f"Error in legacy IMPROVED generate_recommendations: {e}")
+            logger.error(f"Error in legacy GPT-4.1 generate_recommendations: {e}")
             return {
-                "suggestions": [f"Error in IMPROVED diagnostic analysis: {str(e)}"],
+                "suggestions": [f"Error in GPT-4.1 diagnostic analysis: {str(e)}"],
                 "confidence": 0.0,
                 "sources": [],
                 "patient_context": {},
                 "error": str(e),
-                "api_provider": "Mistral AI (Improved Error)"
+                "api_provider": "GitHub AI (GPT-4.1 Error)"
             }

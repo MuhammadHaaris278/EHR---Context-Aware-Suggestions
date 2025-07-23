@@ -20,7 +20,7 @@ import hashlib
 from datetime import datetime, timedelta
 import re
 
-from .retriever import ClinicalRetriever
+from .enhanced_retriever import AdvancedClinicalRetriever
 from .prompt import ClinicalPromptTemplate
 
 # Load environment variables from .env file
@@ -606,7 +606,7 @@ class ClinicalRecommendationPipeline:
             logger.info("Initializing IMPROVED Mistral AI clinical diagnostic pipeline...")
             
             # Initialize retriever for medical literature
-            self.retriever = ClinicalRetriever()
+            self.retriever = AdvancedClinicalRetriever()
             await self.retriever.initialize()
             
             # Initialize Mistral AI LLM

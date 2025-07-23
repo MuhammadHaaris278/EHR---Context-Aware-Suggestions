@@ -18,7 +18,7 @@ import json
 import hashlib
 from datetime import datetime, timedelta
 
-from .retriever import ClinicalRetriever
+from .enhanced_retriever import AdvancedClinicalRetriever
 from .prompt import ClinicalPromptTemplate
 
 # Load environment variables
@@ -690,7 +690,7 @@ class GPT4ClinicalRecommendationPipeline:
             logger.info("Initializing GPT-4.1 clinical diagnostic pipeline via GitHub AI...")
             
             # Initialize retriever for medical literature
-            self.retriever = ClinicalRetriever()
+            self.retriever = AdvancedClinicalRetriever()
             await self.retriever.initialize()
             
             # Initialize GPT-4.1 LLM

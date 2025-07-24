@@ -1,6 +1,7 @@
 """
 Enhanced Medical Document Retriever with intelligent chunking,
 semantic search, and clinical context awareness.
+UPDATED: Integrated with Vector Store Manager and Patient Data Embeddings.
 """
 
 import os
@@ -189,12 +190,15 @@ class ClinicalEmbeddingStrategy:
         return enhanced_text
 
 class AdvancedClinicalRetriever:
-    """Advanced retriever with clinical intelligence and semantic search."""
+    """
+    Advanced retriever with clinical intelligence and semantic search.
+    UPDATED: Works with Vector Store Manager and Patient Embeddings.
+    """
     
     def __init__(
         self, 
         index_path: str = "faiss_index",
-        embedding_model: str = "nomic-ai/nomic-embed-text-v1"
+        embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     ):
         self.index_path = index_path
         self.embedding_model = embedding_model
@@ -463,7 +467,10 @@ class AdvancedClinicalRetriever:
         k: int = 5,
         filter_domain: str = None
     ) -> List[Document]:
-        """Advanced search with clinical context awareness."""
+        """
+        Advanced search with clinical context awareness.
+        UPDATED: Enhanced for integration with patient embeddings.
+        """
         try:
             if not self.initialized:
                 raise RuntimeError("Retriever not initialized")

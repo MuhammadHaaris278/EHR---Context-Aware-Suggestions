@@ -1,0 +1,39 @@
+{
+  "embedded_patients": [
+    "1"
+  ],
+  "patient_metadata": {
+    "1": {
+      "chunk_count": 29,
+      "embedded_at": "2025-07-24T12:17:04.493641",
+      "processing_time_seconds": 0.422845,
+      "clinical_domains": [
+        "renal",
+        "cardiovascular",
+        "oncology",
+        "general",
+        "endocrine",
+        "gastrointestinal",
+        "hepatic",
+        "hematology",
+        "allergy_allergy"
+      ],
+      "chunk_types": [
+        "medication",
+        "diagnosis",
+        "allergy",
+        "laboratory",
+        "summary"
+      ]
+    }
+  },
+  "embedding_stats": {
+    "total_patients_embedded": 1,
+    "total_chunks_created": 29,
+    "total_embedding_time": 0.422845,
+    "average_chunks_per_patient": 29.0
+  },
+  "last_updated": "2025-07-24T12:17:04.493641",
+  "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "device": "cpu"
+}
